@@ -1,0 +1,11 @@
+# eigene Installation – kommt von "wasserzaehler uebernehmen"
+/config.toml
+/referenz.jpg
+/modelle/*.tflite
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+# Ausgaben von "wasserzaehler lies"
+*_gelesen.jpg

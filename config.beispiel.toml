@@ -1,0 +1,56 @@
+# wasserzaehler – Beispielkonfiguration (Diehl Corona MW, AI-on-the-edge v16.1.0)
+# Eigene Konfiguration am besten mit "wasserzaehler uebernehmen <IP>" erzeugen und danach anpassen.
+# MQTT-Benutzer und -Passwort stehen NICHT hier, sondern in /etc/wasserzaehler.env
+
+[kamera]
+host = "192.168.0.13"
+drehung_grad = 47.75
+pause_zwischen_fotos_s = 1.0
+
+[zaehler]
+referenzbild = "referenz.jpg"
+modell_ziffern = "modelle/dig-class100-0182-s2_q.tflite"
+modell_zeiger = "modelle/ana-class100_0171_s1_q.tflite"
+max_abweichung_methoden = 1.0
+max_kettenrest = 2.5
+
+# Rechteck = [x, y, Breite, Höhe] im Referenzbild. Ziffern von der höchsten Stelle nach rechts,
+# Zeiger in der Reihenfolge x0.1, x0.01, x0.001, …
+ziffern = [
+  { name = "dig1000", rechteck = [287, 127, 26, 42] },
+  { name = "dig100", rechteck = [319, 127, 26, 42] },
+  { name = "dig10", rechteck = [351, 127, 26, 42] },
+  { name = "dig1", rechteck = [380, 127, 26, 42] },
+]
+zeiger = [
+  { name = "ana1", rechteck = [388, 230, 96, 96] },
+  { name = "ana2", rechteck = [336, 322, 96, 96] },
+  { name = "ana3", rechteck = [228, 332, 96, 96] },
+  { name = "ana4", rechteck = [154, 256, 96, 96] },
+]
+
+# Fester Versatz Zeiger → Nachfolger, nach ein paar Tagen mit "wasserzaehler kalibrieren" bestimmen
+[zaehler.ketten_versatz]
+
+[messung]
+intervall_s = 300
+bilder_pro_messung = 3
+max_durchfluss_m3h = 5.0
+neuabgleich_nach = 3
+mindestvertrauen = 50
+
+[archiv]
+pfad = "/var/lib/wasserzaehler/archiv"
+tage = 90
+zustandsdatei = "/var/lib/wasserzaehler/zustand.json"
+
+[mqtt]
+host = "192.168.0.50"         # leer = kein MQTT
+port = 1883
+basis = "wasserzaehler"
+client_id = "wasserzaehler-server"
+discovery_praefix = "homeassistant"
+vergleich_topic = ""          # z. B. "wassermeter/main/value", um den Wert des ESP32 mitzulesen
+
+[web]
+port = 8080

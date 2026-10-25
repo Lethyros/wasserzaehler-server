@@ -1,0 +1,16 @@
+[Unit]
+Description=Wasserzähler (ESP32-CAM → Auswertung → MQTT)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=wasserzaehler
+WorkingDirectory=/opt/wasserzaehler
+EnvironmentFile=/etc/wasserzaehler.env
+ExecStart=/opt/wasserzaehler/venv/bin/python -m wasserzaehler -c /opt/wasserzaehler/config.toml dienst
+Restart=always
+RestartSec=20
+StateDirectory=wasserzaehler
+
+[Install]
+WantedBy=multi-user.target

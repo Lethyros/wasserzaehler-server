@@ -1,0 +1,48 @@
+# Testkonfiguration: Lesebereiche und Versatz des Diehl Corona MW aus den Testbildern.
+# Modelle liegen nicht im Repository – vorher "wasserzaehler uebernehmen" oder per Hand nach modelle/ legen.
+
+[kamera]
+host = "kamera.invalid"
+drehung_grad = 47.75          # = InitialRotate in der config.ini des ESP32
+pause_zwischen_fotos_s = 1.0
+
+[zaehler]
+# Referenzbild = gedrehtes Bild vom ESP32 (img_tmp/alg.jpg); die Lesebereiche sind
+# dieselben wie in der config.ini des ESP32.
+referenzbild = "referenz.jpg"
+modell_ziffern = "../../modelle/dig-class100-0182-s2_q.tflite"
+modell_zeiger = "../../modelle/ana-class100_0171_s1_q.tflite"
+max_abweichung_methoden = 1.0
+max_kettenrest = 2.5
+
+# Rechteck = [x, y, Breite, Höhe]. Ziffern von der höchsten Stelle nach rechts.
+# Die 10000er-Rolle fehlt absichtlich (steht auf 0, liegt direkt am Rahmen).
+ziffern = [
+  { name = "z1000", rechteck = [287, 127, 26, 42] },
+  { name = "z100",  rechteck = [319, 127, 26, 42] },
+  { name = "z10",   rechteck = [351, 127, 26, 42] },
+  { name = "z1",    rechteck = [380, 127, 26, 42] },
+]
+zeiger = [
+  { name = "x0.1",    rechteck = [388, 230, 96, 96] },
+  { name = "x0.01",   rechteck = [336, 322, 96, 96] },
+  { name = "x0.001",  rechteck = [228, 332, 96, 96] },
+  { name = "x0.0001", rechteck = [154, 256, 96, 96] },
+]
+
+# Fester mechanischer Versatz Zeiger → Nachfolger (Einheiten des Nachfolgers).
+# Wird mit "wasserzaehler kalibrieren" aus dem Archiv bestimmt.
+# Stand 25.10.2026: 10 Zeigerstellungen 404.727–404.801, Achse aus der Zeigerkopfmitte
+[zaehler.ketten_versatz]
+"x0.1" = -0.2
+"x0.01" = -1.0
+"x0.001" = -0.8
+
+[messung]
+intervall_s = 300
+bilder_pro_messung = 3
+max_durchfluss_m3h = 5.0      # Q3 = 4 m³/h, kurzzeitig bis Q4 = 5 m³/h
+neuabgleich_nach = 3
+mindestvertrauen = 50
+
+
