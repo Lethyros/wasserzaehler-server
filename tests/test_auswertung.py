@@ -64,3 +64,14 @@ def test_neuabgleich_haengt_nicht_fest():
     assert p.pruefe(401.0512, t + 600)[0] is None
     wert, status = p.pruefe(401.0520, t + 900)
     assert wert == 401.0520 and status.startswith("Neuabgleich")
+
+
+def test_kein_neuabgleich_mit_beschlagenen_rollen():
+    # Nacht 25./26.10.2026: beschlagenes Glas lieferte stundenlang stimmig „5.5465“
+    p = Plausibilitaet(max_durchfluss_m3h=5.0, neuabgleich_nach=3)
+    t = 0.0
+    p.pruefe(405.5465, t)
+    for i in range(1, 20):
+        wert, status = p.pruefe(5.5465, t + 300 * i, neuabgleich_erlaubt=False)
+        assert wert is None and "zählt nicht" in status
+    assert p.letzter == 405.5465 and not p.kandidaten

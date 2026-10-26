@@ -72,6 +72,7 @@ modell_ziffern = "modelle/{mz}"
 modell_zeiger = "modelle/{ma}"
 max_abweichung_methoden = 1.0
 max_kettenrest = 2.5
+rollen_mindestkontrast = 0.6   # Rollenkontrast unter 60 % der Referenz = Glas beschlagen
 
 # Rechteck = [x, y, Breite, Höhe] im Referenzbild. Ziffern von der höchsten Stelle nach rechts,
 # Zeiger in der Reihenfolge x0.1, x0.01, x0.001, …
@@ -89,7 +90,8 @@ zeiger = [
 intervall_s = 300
 bilder_pro_messung = 3
 max_durchfluss_m3h = 5.0
-neuabgleich_nach = 3
+neuabgleich_nach = 6           # so viele stimmige Messungen (klare Rollen) übernehmen einen Sprung
+neuabgleich_vertrauen = 90
 mindestvertrauen = 50
 
 [archiv]

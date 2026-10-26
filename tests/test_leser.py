@@ -107,3 +107,29 @@ def test_archiv(leser, k, ordner):
     e = leser.lies([kam.vorbereiten(f.read_bytes()) for f in fotos])
     assert e.wert == pytest.approx(ARCHIV[ordner], abs=0.0006), (e.roh, e.gruende)
     assert e.vertrauen >= 80, e.gruende
+
+
+# Beschlagenes Glas in der Nacht 25./26.10.2026: das Modell las die Rollen als „0000“ bzw.
+# „0005“, der alte Dienst gleich danach auf 0.5196 bzw. 5.5465 ab. Die Zeiger stimmten.
+BESCHLAGEN = {"2026-10-25/232356": (405.5196, 405.5389), "2026-10-26/074145": (405.5718, 405.5718)}
+
+
+@pytest.mark.parametrize("ordner", sorted(BESCHLAGEN))
+def test_beschlagene_rollen(leser, k, ordner):
+    kam = Kamera(k.kamera)
+    fotos = [kam.vorbereiten(f.read_bytes())
+             for f in sorted((HIER / "testdaten" / "archiv" / ordner).glob("foto*.jpg"))]
+    letzter, erwartet = BESCHLAGEN[ordner]
+    e = leser.lies(fotos, letzter)
+    assert not e.rollen_klar and e.rollen_kontrast < k.rollen_mindestkontrast
+    assert e.wert == pytest.approx(erwartet, abs=0.0006), (e.roh, e.gruende)
+    assert any("beschlagen" in g for g in e.gruende)
+    # ohne letzten Stand keine Zahl – lieber nichts als „0.5389“
+    assert leser.lies(fotos).wert is None
+
+
+def test_ganze_aus_letztem():
+    from wasserzaehler.leser import ganze_aus_letztem
+    assert ganze_aus_letztem(0.5389, 405.5196) == 405
+    assert ganze_aus_letztem(0.0213, 405.9871) == 406   # x0.1-Zeiger über die Null
+    assert ganze_aus_letztem(0.9990, 406.0010) == 405   # rückwärts → Plausibilität verwirft

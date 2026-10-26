@@ -5,9 +5,9 @@
 | Feld | Inhalt |
 |---|---|
 | Titel | wasserzaehler-server – Nutzer- und Systemdokumentation |
-| Produktversion | 0.1.0 |
-| Dokumentversion | 1.0 |
-| Stand | 2026-10-25 |
+| Produktversion | 0.2.0 |
+| Dokumentversion | 1.1 |
+| Stand | 2026-10-26 |
 | Status | freigegeben |
 | Autor | Oliver Weber |
 | Sprache | Deutsch |
@@ -19,6 +19,7 @@
 | Version | Datum | Änderung |
 |---|---|---|
 | 1.0 | 2026-10-25 | Erstausgabe |
+| 1.1 | 2026-10-26 | beschlagenes Sichtfenster (10.3, 10.7, 11, 12.4), Neuabgleich nur mit klaren Rollen |
 
 ### 0.2 Konventionen
 
@@ -43,9 +44,10 @@ Das Projekt löst Probleme, die bei der Auswertung direkt auf dem ESP32 regelmä
 | Problem auf dem ESP32 | Lösung hier |
 |---|---|
 | Zeiger werden um 180° falsch gelesen (dicker Zeigerkopf wird für die Spitze gehalten) | jeder Zeiger wird **zweifach** gelesen: KI-Modell und rote Zeigerspitze per Bildverarbeitung |
-| ein falscher Vorwert blockiert das Gerät dauerhaft („Rate too high“) | Plausibilität mit **Neuabgleich**: nach 3 stimmigen Messungen wird ein neuer Stand übernommen |
+| ein falscher Vorwert blockiert das Gerät dauerhaft („Rate too high“) | Plausibilität mit **Neuabgleich**: nach 6 stimmigen, sicheren Messungen wird ein neuer Stand übernommen |
 | Kamera wandert, Lesebereiche liegen daneben | Ausrichtung mit vielen Bildmerkmalen (ORB) statt zwei Marken |
 | keine Aussage, wie sicher ein Wert ist | **Vertrauen 0–100 %** je Messung; unsichere Werte werden nicht veröffentlicht |
+| beschlagenes Sichtfenster: Rollen werden als „0“ gelesen | Rollenkontrast wird gegen das Referenzbild geprüft; ist er zu schwach, kommen die ganzen m³ aus dem letzten Stand, gelesen werden nur die Zeiger |
 | Fehllesungen lassen sich im Nachhinein kaum prüfen | jede Messung wird mit Fotos und Einzelwerten archiviert |
 
 **Nicht im Geltungsbereich:** Zähler ohne Zeiger (nur Rollen), Gas-/Stromzähler mit anderer
@@ -326,6 +328,7 @@ Relative Pfade gelten relativ zum Ordner der `config.toml`.
 | `ziffer_mindestsicherheit` | `0.0` | darunter gilt eine Rolle als unlesbar |
 | `max_abweichung_methoden` | `1.0` | bis zu diesem Abstand werden KI und Spitze gemittelt |
 | `max_kettenrest` | `2.5` | größerer Kettenrest (nach Versatz) kostet Vertrauen |
+| `rollen_mindestkontrast` | `0.6` | Kontrast der schwächsten Rolle als Anteil vom Referenzbild; darunter gelten die Rollen als beschlagen (10.3) |
 | `[zaehler.ketten_versatz]` | leer | `"<zeigername>" = <wert>`, siehe 8.6 |
 
 ### `[messung]`
@@ -334,7 +337,8 @@ Relative Pfade gelten relativ zum Ordner der `config.toml`.
 | `intervall_s` | `300` | Abstand der Messungen |
 | `bilder_pro_messung` | `3` | Fotos je Messung (ungerade Zahl empfohlen) |
 | `max_durchfluss_m3h` | `5.0` | größter plausibler Durchfluss (Q4 des Zählers) |
-| `neuabgleich_nach` | `3` | so viele stimmige Messungen übernehmen einen unplausiblen Stand |
+| `neuabgleich_nach` | `6` | so viele stimmige Messungen übernehmen einen unplausiblen Stand |
+| `neuabgleich_vertrauen` | `90` | nur Messungen mit klaren Rollen und mindestens diesem Vertrauen zählen für den Neuabgleich |
 | `mindestvertrauen` | `50` | darunter wird nicht veröffentlicht |
 
 ### `[archiv]`
@@ -377,6 +381,21 @@ in `zustand.verschiebung` – wächst sie über Tage, wandert die Kamera.
 Ziffernmodell auf jedem Rollen-Lesebereich. class100: Klasse k → k/10 (z. B. 4.7 = Rolle zu 70 %
 von 4 auf 5 gedreht).
 
+**Beschlagenes Sichtfenster.** Fließt kaltes Wasser durch den Zähler, beschlägt das Glas oft für
+Stunden (Feldtest: nach Wasserentnahme am Abend bis zum frühen Morgen). Die roten Zeiger bleiben
+meist lesbar, die schwarzen Ziffern nicht – das Ziffernmodell liest dann mit hoher Sicherheit „0“.
+Deshalb wird je Foto der Kontrast jeder Rolle (Helligkeitsspanne 5.–95. Perzentil) mit derselben
+Rolle im Referenzbild verglichen. Liegt die schwächste Rolle unter `rollen_mindestkontrast`:
+
+- die Rollen werden verworfen (Anzeige `?`, Hinweis „beschlagen“),
+- der Nachkommaanteil kommt aus den Zeigern,
+- die ganzen m³ kommen aus dem letzten Stand; hat der x0,1-Zeiger seitdem die Null überschritten
+  (z. B. 0,97 → 0,02), eins mehr,
+- Vertrauen −10, Grund „Rollen beschlagen (Kontrast … % der Referenz)“,
+- ohne letzten Stand gibt es kein Ergebnis.
+
+Messwerte (Diehl Corona MW): klares Glas 75–95 % der Referenz, Fehllesungen ab etwa 45 %.
+
 ### 10.4 Zeiger: KI und Spitze
 - **KI:** Zeigermodell (class100) → 0,0 … 9,9.
 - **Spitze:** roter Anteil über den a*-Kanal (Lab). Schwelle = Hintergrund + 45 % des Abstands
@@ -414,6 +433,7 @@ mitteln würde Zeitpunkte mischen). Vertrauen = 100 abzüglich:
 | nur ein Verfahren lieferte | 15 |
 | Kettenrest − Versatz > `max_kettenrest` (je Zeigerpaar) | 20 |
 | Rolle unlesbar | 30 (ohne Vorwert: kein Ergebnis) |
+| Rollen beschlagen, m³ aus dem letzten Stand (10.3) | 10 (ohne Vorwert: kein Ergebnis) |
 | höchstens die Hälfte der Fotos lesbar | 30 |
 | Fotowerte weichen > 0,01 m³ vom Median ab | 30 |
 
@@ -430,6 +450,11 @@ Nach dem Vertrauen (`mindestvertrauen`) prüft der Dienst gegen den letzten ver�
 | Rückgang ≤ 0,0005 m³ | ignoriert, alter Stand bleibt („Rauschen rückwärts“) |
 | sonst | verworfen; liefern `neuabgleich_nach` Messungen untereinander stimmige Werte, wird übernommen („Neuabgleich“) |
 
+Für den Neuabgleich zählen nur Messungen mit **klaren Rollen** und einem Vertrauen von mindestens
+`neuabgleich_vertrauen`; andere werden mit „(zählt nicht für Neuabgleich)“ verworfen. Hintergrund:
+In Version 0.1.0 lieferte beschlagenes Glas stundenlang stimmig „0005,5465“ – drei solche Messungen
+reichten, um den Stand von 405,5 auf 5,5 m³ abzugleichen (siehe 12.4).
+
 Vorwert beim Start: `zustandsdatei`, sonst der retained MQTT-Wert.
 
 ## 11 Fehlersuche
@@ -442,7 +467,9 @@ Vorwert beim Start: `zustandsdatei`, sonst der retained MQTT-Wert.
 | „KI … / Spitze … uneinig“ gehäuft | Lesebereich nicht mittig, Spiegelung auf dem Zeiger | Lesebereich mittig setzen, LED-Helligkeit senken, Diffusor |
 | `unsicher (… %)` | mehrere Befunde aus 10.6 | Messung auf der Webseite öffnen, Fotos ansehen |
 | `verworfen: Sprung` | Fehllesung oder echter Sprung (Zählertausch) | wartet auf Neuabgleich; bei Zählertausch Stand setzen (8.4) |
-| `verworfen: rückwärts` | falscher, zu hoher Vorwert | nach 3 stimmigen Messungen Neuabgleich; oder Stand setzen |
+| `verworfen: rückwärts` | falscher, zu hoher Vorwert | nach 6 stimmigen Messungen Neuabgleich; oder Stand setzen |
+| „Rollen beschlagen“ | Kondenswasser auf dem Sichtfenster (kaltes Wasser, warme Raumluft) | nichts nötig, Zeiger werden weiter gelesen; dauerhaft: Zähler/Leitung dämmen, Luft trocknen. Tritt es bei klarem Bild auf: Referenzbild mit klarem Glas neu aufnehmen oder `rollen_mindestkontrast` senken |
+| Sprünge in der Wasserstatistik von HA | Fehlwerte veröffentlicht (z. B. Version 0.1.0 bei beschlagenem Glas) | HA: *Entwicklerwerkzeuge → Statistiken*, Sensor wählen, Ausreißer über „Summe anpassen“ korrigieren |
 | Entitäten fehlen in HA | MQTT-Integration/Discovery aus, falscher Präfix | `discovery_praefix`, Broker-Zugang, `journalctl -u wasserzaehler` |
 | `Modell mit … Ausgängen wird nicht unterstützt` | Modelltyp unbekannt | class100-Modelle verwenden (100 Ausgänge) |
 
@@ -460,9 +487,9 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt pytest
 
 | Testgruppe | Prüft |
 |---|---|
-| `test_auswertung.py` (10) | Übertrag, halb gedrehte Rollen, Umlauf 9→0, Plausibilität, Neuabgleich |
+| `test_auswertung.py` (11) | Übertrag, halb gedrehte Rollen, Umlauf 9→0, Plausibilität, Neuabgleich, kein Neuabgleich mit beschlagenen Rollen |
 | `test_einrichtung.py` (2) | Einlesen der `config.ini` von AI-on-the-edge |
-| `test_leser.py` (17) | Kreisrechnung; 3 Einzelfotos und eine Dreiermessung (404,7274 m³, Vertrauen 100); Spitze auf allen Zeigern; **simulierter 180°-Fehler der KI** wird erkannt und korrigiert; **10 Messungen aus dem Betrieb** (404,7274 … 404,8008 m³), davon eine bei laufendem Wasser |
+| `test_leser.py` (20) | Kreisrechnung; 3 Einzelfotos und eine Dreiermessung (404,7274 m³, Vertrauen 100); Spitze auf allen Zeigern; **simulierter 180°-Fehler der KI** wird erkannt und korrigiert; **10 Messungen aus dem Betrieb** (404,7274 … 404,8008 m³), davon eine bei laufendem Wasser; **2 Messungen mit beschlagenem Glas** (Kontrast 24 % und 39 %), m³ aus dem letzten Stand, ohne letzten Stand kein Wert; Übertrag der ganzen m³ am x0,1-Zeiger |
 
 Ohne Modelle werden die bildbasierten Tests übersprungen.
 
@@ -483,6 +510,19 @@ Ohne Modelle werden die bildbasierten Tests übersprungen.
 - Auswertung je Foto, dann Median: Messungen bei laufendem Wasser ohne Vertrauensverlust.
 - Archivordner in UTC: bei der Zeitumstellung gab es die Stunde 2–3 Uhr doppelt.
 
+### 12.4 Beschlagenes Sichtfenster (Nacht 25./26.10.2026, Version 0.1.0)
+
+| Kennzahl | Ergebnis |
+|---|---|
+| Zeitraum mit beschlagenem Glas | 23:20–05:50 und ab 08:30 (MEZ), jeweils nach Wasserentnahme |
+| Rollenkontrast | klar 75–95 % der Referenz, beschlagen 22–48 % |
+| Lesung 0.1.0 | Rollen „0000“, „0002“, „0004“, „0005“, „0204“; Zeiger korrekt |
+| veröffentlichte Fehlwerte 0.1.0 | 3 Neuabgleiche auf falsche Stände (0,5196 / 5,5427 / 5,5465 m³), je nach 3 stimmigen Fehllesungen; zwei Neuabgleiche zurück auf den richtigen Stand |
+| Nachrechnung mit 0.2.0 (90 archivierte Messungen) | lückenlos steigende Reihe 405,4435 … 405,5719 m³, kein Fehlwert, Vertrauen 65–100 % |
+
+Änderungen in 0.2.0: Kontrastprüfung der Rollen (10.3), Neuabgleich nur mit klaren Rollen und
+Vertrauen ≥ 90, `neuabgleich_nach` 3 → 6.
+
 ## 13 Bekannte Einschränkungen
 
 - Nur Zähler mit Rollen **und** roten Zeigern; Zeiger anderer Farbe erkennt das Spitzenverfahren nicht (die KI liest dann allein, Vertrauen −15 je Zeiger).
@@ -490,6 +530,10 @@ Ohne Modelle werden die bildbasierten Tests übersprungen.
 - Der Versatz wird als konstant angenommen; ein stellungsabhängiger Rest bleibt (siehe 12.3) und wird über `max_kettenrest` toleriert.
 - Der ESP32 bleibt nötig (Kamera + LED). Fällt der Rechner aus, gibt es keine Werte; nach dem Neustart wird sofort wieder der absolute Stand gelesen.
 - Webseite ohne Anmeldung (Kapitel 4).
+- Bei beschlagenem Glas hängt der Wert an den Zeigern und am letzten Stand. Startet der Dienst
+  ohne gespeicherten Stand bei beschlagenem Glas, gibt es bis zum Aufklaren keinen Wert.
+- Ändert sich die Beleuchtung dauerhaft (neue LED-Helligkeit), Referenzbild neu aufnehmen –
+  sonst stimmt der Kontrastvergleich nicht.
 
 ## 14 Wartung
 
@@ -540,6 +584,7 @@ Lizenz des Rechteinhabers); sie sind deshalb nicht enthalten. Details: `DRITTANB
  "zeiger": [{"name": "ana1", "wert": 7.88, "ki": [7.8, 7.8, 7.8], "spitze": [7.88, 7.86, 7.88],
              "hinweis": "(nur bei Auffälligkeiten)"}],
  "ausrichtung": [{"treffer": 1720, "winkel": -0.02, "massstab": 1.002, "verschiebung": [-1.1, -6.6]}],
+ "rollen_klar": true, "rollen_kontrast": 0.83,
  "zeit": "2026-10-25T07:49:25+01:00", "status": "ok", "veroeffentlicht": 404.7807, "esp32": null
 }
 ```

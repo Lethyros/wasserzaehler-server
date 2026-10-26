@@ -91,15 +91,19 @@ class Plausibilitaet:
     Weicht eine Lesung unplausibel ab, wird sie verworfen. Liefern die nächsten
     `neuabgleich_nach` Messungen untereinander einen stimmigen Stand, wird dieser
     als neuer Ausgangswert übernommen (z. B. nach Zählertausch oder falschem Startwert).
+    Als Kandidat zählt nur eine Messung, bei der `neuabgleich_erlaubt` gilt (der Dienst
+    verlangt klare Rollen und hohes Vertrauen) – sonst gleicht beschlagenes Glas, das
+    stundenlang dieselbe falsche Zahl zeigt, den Stand auf Unsinn ab.
     """
     max_durchfluss_m3h: float = 4.0
-    neuabgleich_nach: int = 3
+    neuabgleich_nach: int = 6
     rueckwaerts_toleranz: float = 0.0005
     letzter: float | None = None
     letzte_zeit: float | None = None
     kandidaten: list = field(default_factory=list)
 
-    def pruefe(self, wert: float | None, jetzt: float | None = None) -> tuple[float | None, str]:
+    def pruefe(self, wert: float | None, jetzt: float | None = None,
+               neuabgleich_erlaubt: bool = True) -> tuple[float | None, str]:
         jetzt = time.time() if jetzt is None else jetzt
         if wert is None:
             return None, "unlesbar"
@@ -112,6 +116,8 @@ class Plausibilitaet:
         if 0 <= diff <= self.max_durchfluss_m3h * stunden + 0.002:
             return self._uebernehmen(wert, jetzt, "ok")
         grund = "rückwärts" if diff < 0 else f"Sprung +{diff:.4f} m³"
+        if not neuabgleich_erlaubt:
+            return None, f"verworfen: {grund} (zählt nicht für Neuabgleich)"
         self.kandidaten.append((wert, jetzt))
         k = self.kandidaten[-self.neuabgleich_nach:]
         if len(k) >= self.neuabgleich_nach and all(

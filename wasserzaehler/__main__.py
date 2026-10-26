@@ -92,7 +92,8 @@ class Dienst:
             elif e.vertrauen < self.k.mindestvertrauen:
                 ergebnis, status = None, f"unsicher ({e.vertrauen} %): " + "; ".join(e.gruende)
             else:
-                ergebnis, status = self.plaus.pruefe(e.wert)
+                erlaubt = e.rollen_klar and e.vertrauen >= self.k.neuabgleich_vertrauen
+                ergebnis, status = self.plaus.pruefe(e.wert, neuabgleich_erlaubt=erlaubt)
 
             durchfluss = None
             if ergebnis is not None:
@@ -108,6 +109,7 @@ class Dienst:
                 "esp32": esp32, "zeit": zeit.isoformat(timespec="seconds"),
                 "dauer_s": round(time.time() - beginn, 1),
                 "verschiebung": [i.get("verschiebung") for i in e.ausrichtung],
+                "rollen_klar": e.rollen_klar, "rollen_kontrast": e.als_dict()["rollen_kontrast"],
             }
             ordner = self.archiv.ablegen(zeit, [j for j, _ in fotos],
                                          {**e.als_dict(), "zeit": self.zustand["zeit"], "status": status,

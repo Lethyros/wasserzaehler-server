@@ -24,13 +24,15 @@ class Konfig:
     modell_ziffern: Path
     modell_zeiger: Path
     ziffer_mindestsicherheit: float = 0.0
+    rollen_mindestkontrast: float = 0.6    # darunter gelten die Rollen als beschlagen (Anteil vom Referenzbild)
     max_abweichung_methoden: float = 1.0   # KI und Spitze dürfen so weit auseinander liegen (Zeigereinheiten)
     max_kettenrest: float = 2.5            # Zeiger → Nachfolger, nach Abzug des Versatzes (Einheiten des Nachfolgers)
     ketten_versatz: dict = field(default_factory=dict)
     intervall_s: int = 300
     bilder_pro_messung: int = 3
     max_durchfluss_m3h: float = 5.0
-    neuabgleich_nach: int = 3
+    neuabgleich_nach: int = 6
+    neuabgleich_vertrauen: int = 90        # nur so sichere Messungen mit klaren Rollen zählen für den Neuabgleich
     mindestvertrauen: int = 50             # darunter wird nichts veröffentlicht
     archiv: Path = Path("/var/lib/wasserzaehler/archiv")
     archiv_tage: int = 90
@@ -63,13 +65,15 @@ def lade(pfad: str | Path) -> Konfig:
         modell_ziffern=p(z["modell_ziffern"]),
         modell_zeiger=p(z["modell_zeiger"]),
         ziffer_mindestsicherheit=z.get("ziffer_mindestsicherheit", 0.0),
+        rollen_mindestkontrast=z.get("rollen_mindestkontrast", 0.6),
         max_abweichung_methoden=z.get("max_abweichung_methoden", 1.0),
         max_kettenrest=z.get("max_kettenrest", 2.5),
         ketten_versatz=dict(z.get("ketten_versatz", {})),
         intervall_s=m.get("intervall_s", 300),
         bilder_pro_messung=m.get("bilder_pro_messung", 3),
         max_durchfluss_m3h=m.get("max_durchfluss_m3h", 5.0),
-        neuabgleich_nach=m.get("neuabgleich_nach", 3),
+        neuabgleich_nach=m.get("neuabgleich_nach", 6),
+        neuabgleich_vertrauen=m.get("neuabgleich_vertrauen", 90),
         mindestvertrauen=m.get("mindestvertrauen", 50),
         archiv=p(a.get("pfad", "/var/lib/wasserzaehler/archiv")),
         archiv_tage=a.get("tage", 90),

@@ -14,6 +14,7 @@ modell_ziffern = "../../modelle/dig-class100-0182-s2_q.tflite"
 modell_zeiger = "../../modelle/ana-class100_0171_s1_q.tflite"
 max_abweichung_methoden = 1.0
 max_kettenrest = 2.5
+rollen_mindestkontrast = 0.6   # Rollenkontrast unter 60 % der Referenz = Glas beschlagen
 
 # Rechteck = [x, y, Breite, Höhe]. Ziffern von der höchsten Stelle nach rechts.
 # Die 10000er-Rolle fehlt absichtlich (steht auf 0, liegt direkt am Rahmen).
@@ -42,7 +43,8 @@ zeiger = [
 intervall_s = 300
 bilder_pro_messung = 3
 max_durchfluss_m3h = 5.0      # Q3 = 4 m³/h, kurzzeitig bis Q4 = 5 m³/h
-neuabgleich_nach = 3
+neuabgleich_nach = 6           # so viele stimmige Messungen (klare Rollen) übernehmen einen Sprung
+neuabgleich_vertrauen = 90
 mindestvertrauen = 50
 
 

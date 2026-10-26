@@ -8,6 +8,11 @@ Ablauf je Messung:
   4. Stellen zu einem Wert zusammensetzen (auswertung.zusammensetzen) – je Foto
   5. Median der Fotowerte; Vertrauen 0–100 aus Einigkeit der Methoden, Kette der
      Zeiger und Einigkeit der Fotos
+
+Beschlagenes Glas: Fließt kaltes Wasser, beschlägt das Sichtfenster oft für Stunden.
+Die roten Zeiger bleiben meist lesbar, die Ziffernrollen nicht – das Modell liest dann
+gern „0“. Deshalb wird der Kontrast jeder Rolle mit dem Referenzbild verglichen; ist er
+zu schwach, kommen die ganzen m³ aus dem letzten Stand und nur die Zeiger werden gelesen.
 """
 
 import math
@@ -52,6 +57,23 @@ def ketten_rest(zeiger: float, nachfolger: float) -> float:
     return d - 10 if d > 5 else d
 
 
+def kontrast(ausschnitt_rgb: np.ndarray) -> float:
+    """Spanne der Helligkeit (5.–95. Perzentil); robust gegen einzelne Spiegelungen."""
+    g = cv2.cvtColor(ausschnitt_rgb, cv2.COLOR_RGB2GRAY)
+    return float(np.percentile(g, 95) - np.percentile(g, 5))
+
+
+def ganze_aus_letztem(nachkomma: float, letzter: float) -> int:
+    """Ganze m³ zu einem Nachkommaanteil, passend zum letzten Stand.
+
+    Hat der x0.1-Zeiger seit dem letzten Stand die Null überschritten (0.97 → 0.02),
+    ist die m³-Rolle eins weiter; umgekehrt eins zurück (dann verwirft die Plausibilität).
+    """
+    ganz = math.floor(letzter)
+    d = nachkomma - (letzter - ganz)
+    return ganz + 1 if d < -0.5 else ganz - 1 if d > 0.5 else ganz
+
+
 def _wickeln(d: float) -> float:
     d %= 10
     return d - 10 if d > 5 else d
@@ -76,6 +98,8 @@ class Ergebnis:
     zeiger: list
     ausrichtung: list
     bild: np.ndarray | None  # erstes ausgerichtetes Bild (RGB), für Anzeige
+    rollen_klar: bool = True  # False: mindestens ein Foto mit beschlagenen Rollen
+    rollen_kontrast: float | None = None  # schwächste Rolle im Verhältnis zum Referenzbild
 
     def als_dict(self) -> dict:
         def st(s):
@@ -85,7 +109,8 @@ class Ergebnis:
                     **({"hinweis": s.hinweis} if s.hinweis else {})}
         return {"wert": self.wert, "roh": self.roh, "vertrauen": self.vertrauen, "gruende": self.gruende,
                 "ziffern": [st(s) for s in self.ziffern], "zeiger": [st(s) for s in self.zeiger],
-                "ausrichtung": self.ausrichtung}
+                "ausrichtung": self.ausrichtung, "rollen_klar": self.rollen_klar,
+                "rollen_kontrast": None if self.rollen_kontrast is None else round(self.rollen_kontrast, 2)}
 
 
 def lade_rgb(pfad) -> np.ndarray:
@@ -102,6 +127,7 @@ class Leser:
         self.ausrichter = Ausrichter(self.referenz, arbeitsbreite=self.referenz.shape[1])
         self.m_ziffern = Modell(k.modell_ziffern)
         self.m_zeiger = Modell(k.modell_zeiger)
+        self.ref_kontrast = [max(kontrast(ausschneiden(self.referenz, r)), 1.0) for r in k.ziffern]
 
     def lies(self, bilder_rgb: list[np.ndarray], letzter: float | None = None) -> Ergebnis:
         """Jedes Foto wird für sich komplett ausgewertet, dann zählt der Median der Gesamtwerte.
@@ -124,7 +150,8 @@ class Leser:
         gueltig = [e for e in einzeln if e.wert is not None]
         if not gueltig:
             e = einzeln[0]
-            return Ergebnis(None, e.roh, 0, e.gruende, *self._stellen(einzeln, e), infos, ausgerichtet[0])
+            return Ergebnis(None, e.roh, 0, e.gruende, *self._stellen(einzeln, e), infos, ausgerichtet[0],
+                            all(x.rollen_klar for x in einzeln), e.rollen_kontrast)
 
         werte = sorted(e.wert for e in gueltig)
         mitte = werte[(len(werte) - 1) // 2]
@@ -143,12 +170,22 @@ class Leser:
             gruende.append("Fotos uneinig: " + " / ".join(f"{w:.4f}" for w in werte))
         ziffern, zeiger = self._stellen(einzeln, beste)
         return Ergebnis(mitte, beste.roh, int(max(0, vertrauen)), gruende, ziffern, zeiger, infos,
-                        ausgerichtet[einzeln.index(beste)])
+                        ausgerichtet[einzeln.index(beste)], all(e.rollen_klar for e in einzeln),
+                        min((e.rollen_kontrast for e in einzeln if e.rollen_kontrast is not None), default=None))
 
     def _lies_foto(self, a: np.ndarray, letzter: float | None) -> Ergebnis:
         gruende = []
-        ziffern = [Stelle(r.name, v, [v]) for r in self.k.ziffern
-                   for v in [self.m_ziffern.lies(ausschneiden(a, r), r.name, self.k.ziffer_mindestsicherheit).wert]]
+        ziffern, verhaeltnis = [], None
+        for r, ref in zip(self.k.ziffern, self.ref_kontrast):
+            c = ausschneiden(a, r)
+            v = self.m_ziffern.lies(c, r.name, self.k.ziffer_mindestsicherheit).wert
+            ziffern.append(Stelle(r.name, v, [v]))
+            q = kontrast(c) / ref
+            verhaeltnis = q if verhaeltnis is None else min(verhaeltnis, q)
+        klar = verhaeltnis is None or verhaeltnis >= self.k.rollen_mindestkontrast
+        if not klar:
+            for z in ziffern:
+                z.wert, z.hinweis = None, "beschlagen"
         zeiger = []
         for r in self.k.zeiger:
             c = ausschneiden(a, r)
@@ -156,12 +193,24 @@ class Leser:
             zeiger.append(Stelle(r.name, None, [self.m_zeiger.lies(c, r.name).wert],
                                  [sp.wert if sp.wert is not None and sp.sicherheit >= 0.3 else None]))
         self._zeiger_zusammenfuehren(zeiger, gruende)
-        vertrauen = self._vertrauen(ziffern, zeiger, gruende)
-        wert, roh = zusammensetzen([z.wert for z in ziffern], [z.wert for z in zeiger], letzter)
+        vertrauen = self._vertrauen(ziffern if klar else [], zeiger, gruende)
+        if klar:
+            wert, roh = zusammensetzen([z.wert for z in ziffern], [z.wert for z in zeiger], letzter)
+        else:
+            nachkomma, roh_nk = zusammensetzen([], [z.wert for z in zeiger])
+            gruende.append(f"Rollen beschlagen (Kontrast {verhaeltnis:.0%} der Referenz)")
+            if letzter is None:
+                wert, roh = None, "B" * len(ziffern) + roh_nk
+            else:
+                ganz = ganze_aus_letztem(nachkomma, letzter)
+                wert = round(ganz + nachkomma, len(zeiger))
+                roh = str(ganz).zfill(len(ziffern))[-len(ziffern):] + roh_nk
+                vertrauen -= 10
+                gruende.append("ganze m³ aus dem letzten Stand")
         if wert is None:
             vertrauen = 0
-            gruende.append("Rolle unlesbar")
-        return Ergebnis(wert, roh, vertrauen, gruende, ziffern, zeiger, [], a)
+            gruende.append("Rolle unlesbar" if klar else "kein letzter Stand für die beschlagenen Rollen")
+        return Ergebnis(wert, roh, max(0, vertrauen), gruende, ziffern, zeiger, [], a, klar, verhaeltnis)
 
     @staticmethod
     def _stellen(einzeln: list[Ergebnis], beste: Ergebnis) -> tuple[list, list]:

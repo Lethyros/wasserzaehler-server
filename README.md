@@ -18,7 +18,9 @@ den ESP32 nur noch fotografieren und macht den Rest auf dem Server:
 - **Die Zeiger prüfen sich gegenseitig** (x0,01 auf 2,4 → x0,001 muss bei etwa 4 stehen).
 - **3 Fotos je Messung**, jedes komplett ausgewertet, Median – auch bei laufendem Wasser.
 - **Vertrauen 0–100 %** je Messung; unsichere Werte werden nicht veröffentlicht.
-- **Kein Festhängen**: unplausible Sprünge werden verworfen, nach 3 stimmigen Messungen aber übernommen.
+- **Kein Festhängen**: unplausible Sprünge werden verworfen, nach 6 stimmigen, sicheren Messungen aber übernommen.
+- **Beschlagenes Glas** (kaltes Wasser!) wird am Kontrast der Ziffernrollen erkannt – dann zählen
+  nur die Zeiger, die ganzen m³ kommen aus dem letzten Stand.
 - **Ausrichtung mit vielen Bildmerkmalen** – eine wandernde Kamera stört nicht.
 - **Archiv** aller Messungen mit Fotos, Webseite zum Nachprüfen.
 - Home-Assistant-**Discovery**: Zählerstand (Energie-Dashboard), Durchfluss, Vertrauen, Bild, Knöpfe.
@@ -26,6 +28,8 @@ den ESP32 nur noch fotografieren und macht den Rest auf dem Server:
 Feldtest: 111 Messungen über Nacht, kein einziger falscher Wert veröffentlicht, 83 von 91
 Vergleichen mit den Rohwerten des ESP32 auf 0,5 L gleich (Rest: Zeitversatz bei laufendem Wasser).
 Einmal las die KI einen Zeiger um 180° falsch – das Spitzenverfahren hat es abgefangen.
+In der zweiten Nacht beschlug das Sichtfenster stundenlang; Version 0.1.0 las die Rollen dann als
+„0005“ und übernahm das – seit 0.2.0 wird das erkannt (Nachrechnung: lückenlos richtige Reihe).
 
 ## Schnellstart
 
@@ -67,7 +71,9 @@ takes the pictures; a small Linux box does the evaluation and publishes to MQTT 
   pointer tip (fixes the typical 180° misreadings); pointers are cross-checked against each other
 - 3 photos per reading, each fully evaluated, median; confidence score 0–100, low-confidence
   readings are not published
-- plausibility check that never gets stuck (re-sync after 3 consistent readings)
+- plausibility check that never gets stuck (re-sync after 6 consistent, confident readings)
+- fogged meter glass (condensation from cold water) is detected via digit-roll contrast; the
+  integer m³ then come from the last reading, only the pointers are read
 - feature-based alignment (ORB), archive with photos, small web UI
 - `wasserzaehler uebernehmen <esp32-ip>` imports ROIs, rotation, reference image and models
   from your camera
